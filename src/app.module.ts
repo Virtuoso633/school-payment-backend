@@ -4,6 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config'; // Ensure ConfigSe
 import { MongooseModule } from '@nestjs/mongoose'; // Import MongooseModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { UsersModule } from './users/users.module';
+import { UsersService } from './users/users.service';
+import { OrdersModule } from './orders/orders.module';
+import { OrdersService } from './orders.service';
+import { OrdersController } from './orders.controller';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { WebhooksService } from './webhooks.service';
 
 @Module({
   imports: [
@@ -21,9 +28,12 @@ import { AppService } from './app.service';
       }),
       inject: [ConfigService], // Inject ConfigService into the factory
     }),
+    UsersModule,
+    OrdersModule,
+    WebhooksModule,
     // Other modules will be added here later
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, OrdersController],
+  providers: [AppService, UsersService, OrdersService, WebhooksService],
 })
 export class AppModule {}
