@@ -36,6 +36,9 @@ export class Order {
   gateway_name?: string; // Optional field
 
   // Mongoose automatically adds _id: ObjectId
+
+  @Prop({ required: true, type: Number }) // Add this line
+  amount: number; // Add this property
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

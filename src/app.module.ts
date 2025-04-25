@@ -1,16 +1,16 @@
-// src/app.module.ts
+
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config'; // Ensure ConfigService is imported
-import { MongooseModule } from '@nestjs/mongoose'; // Import MongooseModule
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
-import { UsersService } from './users/users.service';
 import { OrdersModule } from './orders/orders.module';
-import { OrdersService } from './orders.service';
-import { OrdersController } from './orders.controller';
 import { WebhooksModule } from './webhooks/webhooks.module';
-import { WebhooksService } from './webhooks.service';
+import { AuthModule } from './auth/auth.module';
+import { AuthService } from './auth/auth.service';
+import { AuthController } from './auth/auth.controller';
+import { WebhooksController } from './webhooks/webhooks.controller';
 
 @Module({
   imports: [
@@ -18,22 +18,19 @@ import { WebhooksService } from './webhooks.service';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    MongooseModule.forRootAsync({ // Configure Mongoose asynchronously
-      imports: [ConfigModule], // Make ConfigModule available within this factory
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGO_URI'), // Get URI from .env
-        // Optional: Add other Mongoose connection options if needed
-        // useNewUrlParser: true, // Generally default in recent Mongoose versions
-        // useUnifiedTopology: true, // Generally default in recent Mongoose versions
+        uri: configService.get<string>('MONGO_URI'),
       }),
-      inject: [ConfigService], // Inject ConfigService into the factory
+      inject: [ConfigService],
     }),
     UsersModule,
     OrdersModule,
     WebhooksModule,
-    // Other modules will be added here later
+    AuthModule,
   ],
-  controllers: [AppController, OrdersController],
-  providers: [AppService, UsersService, OrdersService, WebhooksService],
+  controllers: [AppController, AuthController, WebhooksController],
+  providers: [AppService, AuthService],
 })
 export class AppModule {}
