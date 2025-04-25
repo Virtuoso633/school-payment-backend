@@ -9,20 +9,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebhooksModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
-const webhooks_service_1 = require("../webhooks.service");
+const webhooks_controller_1 = require("./webhooks.controller");
+const webhooks_service_1 = require("./webhooks.service");
 const webhook_log_schema_1 = require("./schemas/webhook-log.schema");
-const orders_module_1 = require("../orders/orders.module");
+const order_schema_1 = require("../orders/schemas/order.schema");
+const order_status_schema_1 = require("../orders/schemas/order-status.schema");
 let WebhooksModule = class WebhooksModule {
 };
 exports.WebhooksModule = WebhooksModule;
 exports.WebhooksModule = WebhooksModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            mongoose_1.MongooseModule.forFeature([{ name: webhook_log_schema_1.WebhookLog.name, schema: webhook_log_schema_1.WebhookLogSchema }]),
-            orders_module_1.OrdersModule,
+            mongoose_1.MongooseModule.forFeature([
+                { name: webhook_log_schema_1.WebhookLog.name, schema: webhook_log_schema_1.WebhookLogSchema },
+                { name: order_schema_1.Order.name, schema: order_schema_1.OrderSchema },
+                { name: order_status_schema_1.OrderStatus.name, schema: order_status_schema_1.OrderStatusSchema },
+            ]),
         ],
+        controllers: [webhooks_controller_1.WebhooksController],
         providers: [webhooks_service_1.WebhooksService],
-        exports: [webhooks_service_1.WebhooksService]
+        exports: [webhooks_service_1.WebhooksService],
     })
 ], WebhooksModule);
 //# sourceMappingURL=webhooks.module.js.map
