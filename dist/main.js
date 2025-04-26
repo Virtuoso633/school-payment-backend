@@ -5,6 +5,12 @@ const app_module_1 = require("./app.module");
 const common_1 = require("@nestjs/common");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
+    const frontendUrl = process.env.FRONTEND_URL || '*';
+    app.enableCors({
+        origin: frontendUrl,
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        credentials: true,
+    });
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
@@ -13,8 +19,9 @@ async function bootstrap() {
             enableImplicitConversion: true,
         },
     }));
-    await app.listen(3000);
-    console.log(`Application is running on: ${await app.getUrl()}`);
+    const port = process.env.PORT || 3000;
+    await app.listen(port);
+    console.log(`Application is running on port ${port}`);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map
