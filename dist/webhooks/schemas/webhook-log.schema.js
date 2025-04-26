@@ -21,7 +21,8 @@ var ProcessingStatus;
 })(ProcessingStatus || (exports.ProcessingStatus = ProcessingStatus = {}));
 let WebhookLog = class WebhookLog {
     payload;
-    receivedAt;
+    received_at;
+    processed_at;
     processingStatus;
     errorMessage;
     source;
@@ -34,7 +35,11 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({ default: Date.now }),
     __metadata("design:type", Date)
-], WebhookLog.prototype, "receivedAt", void 0);
+], WebhookLog.prototype, "received_at", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Date }),
+    __metadata("design:type", Date)
+], WebhookLog.prototype, "processed_at", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: String, enum: ProcessingStatus, default: ProcessingStatus.RECEIVED, index: true }),
     __metadata("design:type", String)

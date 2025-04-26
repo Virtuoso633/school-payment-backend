@@ -24,7 +24,7 @@ export class WebhooksService {
     const logEntry = new this.webhookLogModel({
       payload: payload,
       source: source,
-      receivedAt: new Date(),
+      received_at: new Date(),
       processingStatus: ProcessingStatus.RECEIVED,
     });
 
@@ -43,86 +43,79 @@ export class WebhooksService {
 
   // 2. Process the logged webhook data asynchronously
   async processPaymentWebhook(logEntry: WebhookLogDocument): Promise<void> {
-    this.logger.log(`Processing webhook log ID: ${logEntry._id}`);
-    const payload = logEntry.payload;
-
     try {
-      // --- Validate Payload Structure ---
-      if (!payload || !payload.order_info || !payload.order_info.order_id || typeof payload.status !== 'number') {
-        throw new BadRequestException('Invalid webhook payload structure');
+      this.logger.log(`Processing payment webhook with ID: ${logEntry._id}`);
+      
+      // 1. Update log status to 'processing'
+      logEntry.processingStatus = ProcessingStatus.PROCESSING;
+      await logEntry.save();
+      
+      // 2. Extract order info from payload
+      const payload = logEntry.payload;
+      if (!payload || !payload.order_info) {
+        throw new BadRequestException('Invalid webhook payload format: missing order_info');
       }
-      if(payload.status !== 200) {
-         throw new BadRequestException(`Webhook status indicates failure or non-standard response: ${payload.status}`);
-      }
-
+      
       const orderInfo = payload.order_info;
-      const orderIdParts = orderInfo.order_id.split('/'); // Format: "collect_id/transaction_id"
-
-      if (orderIdParts.length < 1) { // Allow for possibility of only collect_id? Check API behavior. Assume at least collect_id.
-        throw new BadRequestException('Invalid order_id format in webhook payload');
+      
+      // 3. Extract order ID from the order_id field (format: "mongoId/transactionId")
+      const orderIdParts = orderInfo.order_id.split('/');
+      if (!orderIdParts || orderIdParts.length < 1) {
+        throw new BadRequestException(`Invalid order_id format: ${orderInfo.order_id}`);
       }
-
-      const collectIdString = orderIdParts[0];
-      // const transactionId = orderIdParts[1]; // Might be useful
-
-      // Validate if collectIdString is a valid MongoDB ObjectId
-      if (!Types.ObjectId.isValid(collectIdString)) {
-         throw new BadRequestException(`Invalid collect_id format: ${collectIdString}`);
+      
+      const collectIdString = orderIdParts[0]; // Extract MongoDB ObjectId part
+      
+      // 4. Convert to ObjectId
+      let collectObjectId;
+      try {
+        collectObjectId = new Types.ObjectId(collectIdString);
+      } catch (error) {
+        throw new BadRequestException(`Invalid MongoDB ObjectId: ${collectIdString}`);
       }
-      const collectObjectId = new Types.ObjectId(collectIdString);
-
-      // --- Check if the corresponding Order exists ---
+      
+      this.logger.debug(`Extracted Order ID: ${collectObjectId}`);
+      
+      // 5. Check if the corresponding Order exists
       const orderExists = await this.orderModel.findById(collectObjectId).exec();
       if (!orderExists) {
-          throw new NotFoundException(`Order with collect_id ${collectIdString} not found.`);
+        throw new NotFoundException(`Order with collect_id ${collectIdString} not found.`);
       }
-
-      // --- Prepare OrderStatus Data ---
-      // Map webhook payload fields to OrderStatus schema fields
-      const orderStatusData: Partial<OrderStatus> = {
-        collect_id: collectObjectId as unknown as any, // Link to the Order document
+      
+      // 6. Prepare OrderStatus Data
+      const orderStatusData = {
+        collect_id: collectObjectId,
         order_amount: orderInfo.order_amount,
         transaction_amount: orderInfo.transaction_amount,
         payment_mode: orderInfo.payment_mode,
-        payment_details: orderInfo.payemnt_details, // Typo in assessment spec? Assuming payemnt_details
+        payment_details: orderInfo.payemnt_details, // Note: typo in field name from API
         bank_reference: orderInfo.bank_reference,
-        payment_message: orderInfo.Payment_message, // Typo in assessment spec? Assuming Payment_message
+        payment_message: orderInfo.Payment_message, // Note: capitalization in field name from API
         status: orderInfo.status, // e.g., "success"
-        error_message: orderInfo.error_message === "NA" ? undefined : orderInfo.error_message, // Handle "NA"
+        error_message: orderInfo.error_message === "NA" ? undefined : orderInfo.error_message,
         payment_time: orderInfo.payment_time ? new Date(orderInfo.payment_time) : undefined,
       };
-
-      // --- Update/Create OrderStatus ---
-      // Use updateOne with upsert: If status for this order doesn't exist, create it.
-      // If it exists, update it (might be risky if multiple updates arrive).
-      // A safer approach might be to always create a new status entry if status changes.
-      // Let's use findOneAndUpdate with upsert for simplicity based on spec.
-      // We match on collect_id. If multiple statuses are possible per order, rethink this.
-      // Assuming one final status per order for now.
-      const updatedStatus = await this.orderStatusModel.findOneAndUpdate(
-        { collect_id: collectObjectId }, // Find based on the Order reference
-        { $set: orderStatusData }, // Set the new data
-        { new: true, upsert: true, runValidators: true } // Options: return updated, create if not found, run schema validation
-      ).exec();
-
-      this.logger.log(`Order status updated/created for collect_id ${collectIdString}. New status: ${updatedStatus.status}`);
-
-      // --- Update Log Entry Status ---
+      
+      // 7. Create and save OrderStatus
+      const orderStatus = new this.orderStatusModel(orderStatusData);
+      await orderStatus.save();
+      
+      this.logger.log(`Created OrderStatus for order ${collectIdString} with status: ${orderInfo.status}`);
+      
+      // 8. Update webhook log to 'processed'
       logEntry.processingStatus = ProcessingStatus.PROCESSED;
-      logEntry.errorMessage = undefined;
-
+      logEntry.processed_at = new Date();
+      await logEntry.save();
+      
+      this.logger.log(`Webhook processing completed for ID: ${logEntry._id}`);
     } catch (error) {
-      this.logger.error(`Error processing webhook log ${logEntry._id}: ${error.message}`, error.stack);
+      // Update log status to 'failed'
       logEntry.processingStatus = ProcessingStatus.ERROR;
       logEntry.errorMessage = error.message;
-      // Decide if you need to re-throw or handle specific errors differently
-    } finally {
-      // Always save the updated log entry status
-      try {
-        await logEntry.save();
-      } catch (saveError) {
-        this.logger.error(`Failed to update webhook log status for ${logEntry._id}: ${saveError.message}`, saveError.stack);
-      }
+      await logEntry.save();
+      
+      this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
+      throw error; // Rethrow for controller to log
     }
   }
 }

@@ -36,7 +36,7 @@ let WebhooksService = WebhooksService_1 = class WebhooksService {
         const logEntry = new this.webhookLogModel({
             payload: payload,
             source: source,
-            receivedAt: new Date(),
+            received_at: new Date(),
             processingStatus: webhook_log_schema_1.ProcessingStatus.RECEIVED,
         });
         try {
@@ -50,25 +50,28 @@ let WebhooksService = WebhooksService_1 = class WebhooksService {
         }
     }
     async processPaymentWebhook(logEntry) {
-        this.logger.log(`Processing webhook log ID: ${logEntry._id}`);
-        const payload = logEntry.payload;
         try {
-            if (!payload || !payload.order_info || !payload.order_info.order_id || typeof payload.status !== 'number') {
-                throw new common_1.BadRequestException('Invalid webhook payload structure');
-            }
-            if (payload.status !== 200) {
-                throw new common_1.BadRequestException(`Webhook status indicates failure or non-standard response: ${payload.status}`);
+            this.logger.log(`Processing payment webhook with ID: ${logEntry._id}`);
+            logEntry.processingStatus = webhook_log_schema_1.ProcessingStatus.PROCESSING;
+            await logEntry.save();
+            const payload = logEntry.payload;
+            if (!payload || !payload.order_info) {
+                throw new common_1.BadRequestException('Invalid webhook payload format: missing order_info');
             }
             const orderInfo = payload.order_info;
             const orderIdParts = orderInfo.order_id.split('/');
-            if (orderIdParts.length < 1) {
-                throw new common_1.BadRequestException('Invalid order_id format in webhook payload');
+            if (!orderIdParts || orderIdParts.length < 1) {
+                throw new common_1.BadRequestException(`Invalid order_id format: ${orderInfo.order_id}`);
             }
             const collectIdString = orderIdParts[0];
-            if (!mongoose_2.Types.ObjectId.isValid(collectIdString)) {
-                throw new common_1.BadRequestException(`Invalid collect_id format: ${collectIdString}`);
+            let collectObjectId;
+            try {
+                collectObjectId = new mongoose_2.Types.ObjectId(collectIdString);
             }
-            const collectObjectId = new mongoose_2.Types.ObjectId(collectIdString);
+            catch (error) {
+                throw new common_1.BadRequestException(`Invalid MongoDB ObjectId: ${collectIdString}`);
+            }
+            this.logger.debug(`Extracted Order ID: ${collectObjectId}`);
             const orderExists = await this.orderModel.findById(collectObjectId).exec();
             if (!orderExists) {
                 throw new common_1.NotFoundException(`Order with collect_id ${collectIdString} not found.`);
@@ -85,23 +88,20 @@ let WebhooksService = WebhooksService_1 = class WebhooksService {
                 error_message: orderInfo.error_message === "NA" ? undefined : orderInfo.error_message,
                 payment_time: orderInfo.payment_time ? new Date(orderInfo.payment_time) : undefined,
             };
-            const updatedStatus = await this.orderStatusModel.findOneAndUpdate({ collect_id: collectObjectId }, { $set: orderStatusData }, { new: true, upsert: true, runValidators: true }).exec();
-            this.logger.log(`Order status updated/created for collect_id ${collectIdString}. New status: ${updatedStatus.status}`);
+            const orderStatus = new this.orderStatusModel(orderStatusData);
+            await orderStatus.save();
+            this.logger.log(`Created OrderStatus for order ${collectIdString} with status: ${orderInfo.status}`);
             logEntry.processingStatus = webhook_log_schema_1.ProcessingStatus.PROCESSED;
-            logEntry.errorMessage = undefined;
+            logEntry.processed_at = new Date();
+            await logEntry.save();
+            this.logger.log(`Webhook processing completed for ID: ${logEntry._id}`);
         }
         catch (error) {
-            this.logger.error(`Error processing webhook log ${logEntry._id}: ${error.message}`, error.stack);
             logEntry.processingStatus = webhook_log_schema_1.ProcessingStatus.ERROR;
             logEntry.errorMessage = error.message;
-        }
-        finally {
-            try {
-                await logEntry.save();
-            }
-            catch (saveError) {
-                this.logger.error(`Failed to update webhook log status for ${logEntry._id}: ${saveError.message}`, saveError.stack);
-            }
+            await logEntry.save();
+            this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
+            throw error;
         }
     }
 };

@@ -8,7 +8,8 @@ export declare enum ProcessingStatus {
 }
 export declare class WebhookLog {
     payload: any;
-    receivedAt: Date;
+    received_at: Date;
+    processed_at: Date;
     processingStatus: ProcessingStatus;
     errorMessage?: string;
     source?: string;

@@ -36,91 +36,201 @@ let OrdersService = OrdersService_1 = class OrdersService {
         this.configService = configService;
     }
     async createOrder(createPaymentDto, userId) {
-        const orderData = {
-            school_id: createPaymentDto.school_id,
-            trustee_id: createPaymentDto.trustee_id || userId,
-            student_info: createPaymentDto.student_info,
-            amount: createPaymentDto.amount,
-        };
-        const newOrder = new this.orderModel(orderData);
-        await newOrder.save();
-        this.logger.log(`Created new order with ID: ${newOrder._id}`);
-        return newOrder;
+        this.logger.log(`Creating order for school ${createPaymentDto.school_id} by user ${userId}`);
+        try {
+            const order = new this.orderModel({
+                school_id: createPaymentDto.school_id,
+                trustee_id: userId || createPaymentDto.trustee_id,
+                student_info: createPaymentDto.student_info,
+                amount: createPaymentDto.amount,
+                gateway_name: 'Edviron',
+            });
+            await order.save();
+            this.logger.log(`Created new order with ID: ${order._id}`);
+            return order;
+        }
+        catch (error) {
+            this.logger.error(`Error creating order: ${error.message}`, error.stack);
+            throw new common_1.InternalServerErrorException(`Failed to create order: ${error.message}`);
+        }
     }
     async initiatePayment(order, callbackUrl) {
-        const paymentApiBaseUrl = this.configService.get('PAYMENT_API_BASE_URL');
-        const paymentApiKey = this.configService.get('PAYMENT_API_KEY');
-        const pgSecretKey = this.configService.get('PAYMENT_PG_SECRET_KEY') || this.configService.get('PAYMENT_PG_KEY');
-        const signPayload = {
+        this.logger.log(`Initiating payment request to ${this.configService.get('PAYMENT_API_BASE_URL')}/create-collect-request for order ${order._id}`);
+        const payload = {
             school_id: order.school_id,
             amount: order.amount.toString(),
             callback_url: callbackUrl,
         };
+        const pgSecretKey = this.configService.get('PAYMENT_PG_SECRET_KEY');
         if (!pgSecretKey) {
-            this.logger.error('Payment gateway signing key is not configured.');
-            throw new common_1.InternalServerErrorException('Payment gateway signing key is not configured.');
+            throw new common_1.InternalServerErrorException('Payment gateway secret key not configured');
         }
-        let signedJwt;
-        try {
-            signedJwt = jwt.sign(signPayload, pgSecretKey, { algorithm: 'HS256' });
-        }
-        catch (error) {
-            this.logger.error(`Failed to sign JWT payload: ${error.message}`, error.stack);
-            throw new common_1.InternalServerErrorException('Failed to prepare payment request.');
-        }
-        const apiRequestBody = {
-            school_id: signPayload.school_id,
-            amount: signPayload.amount,
-            callback_url: signPayload.callback_url,
-            sign: signedJwt,
+        const sign = jwt.sign(payload, pgSecretKey);
+        const requestBody = {
+            ...payload,
+            sign,
         };
-        const apiUrl = `${paymentApiBaseUrl}/create-collect-request`;
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${paymentApiKey}`,
-        };
-        this.logger.log(`Initiating payment request to ${apiUrl} for order ${order._id}`);
-        this.logger.debug(`Request Body: ${JSON.stringify(apiRequestBody)}`);
+        this.logger.debug(`Request Body: ${JSON.stringify(requestBody)}`);
         try {
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.post(apiUrl, apiRequestBody, { headers }).pipe((0, rxjs_1.catchError)((error) => {
-                this.logger.error(`Payment API Error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`, error.stack);
-                throw new common_1.InternalServerErrorException('Payment gateway request failed.');
+            const { data, status } = await (0, rxjs_1.firstValueFrom)(this.httpService
+                .post(`${this.configService.get('PAYMENT_API_BASE_URL')}/create-collect-request`, requestBody, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.configService.get('PAYMENT_API_KEY')}`,
+                },
+            })
+                .pipe((0, rxjs_1.catchError)((error) => {
+                this.logger.error(`Payment API error: ${error.message}`, error.stack);
+                if (error.response) {
+                    this.logger.error(`Payment API error response: ${JSON.stringify(error.response.data)}`);
+                }
+                throw new common_1.InternalServerErrorException('Failed to initiate payment through gateway');
             })));
-            this.logger.log(`Payment API Response Status: ${response.status}`);
-            this.logger.debug(`Payment API Response Body: ${JSON.stringify(response.data)}`);
-            const responseData = response.data;
-            if (response.status === 200 || response.status === 201) {
-                const redirectUrl = responseData.collect_request_url || responseData.Collect_request_url || responseData.redirectURL || responseData.redirect_url;
-                const requestId = responseData.collect_request_id || responseData.collectRequestId || responseData.request_id;
+            this.logger.log(`Payment API Response Status: ${status}`);
+            this.logger.debug(`Payment API Response Body: ${JSON.stringify(data)}`);
+            if (status === 200 || status === 201) {
+                const redirectUrl = data.collect_request_url || data.Collect_request_url || data.redirectURL || data.redirect_url;
+                const requestId = data.collect_request_id || data.collectRequestId || data.request_id;
                 if (redirectUrl && requestId) {
                     return {
                         paymentRedirectUrl: redirectUrl,
-                        collectRequestId: requestId
+                        collectRequestId: requestId,
                     };
                 }
                 else {
-                    this.logger.error(`Payment API returned incomplete response: ${JSON.stringify(responseData)}`);
+                    this.logger.error(`Payment API returned incomplete response: ${JSON.stringify(data)}`);
                     throw new common_1.InternalServerErrorException('Payment gateway returned an incomplete response.');
                 }
             }
             else {
-                this.logger.error(`Payment API returned unexpected status: ${response.status}`);
+                this.logger.error(`Payment API returned unexpected status: ${status}`);
                 throw new common_1.InternalServerErrorException('Payment gateway returned an unexpected status.');
             }
         }
         catch (error) {
-            this.logger.error(`Error during payment initiation: ${error.message}`);
-            throw error;
+            if (error instanceof common_1.InternalServerErrorException) {
+                throw error;
+            }
+            this.logger.error(`Error during payment initiation: ${error.message}`, error.stack);
+            throw new common_1.InternalServerErrorException(`Error during payment initiation: ${error.message}`);
         }
     }
-    async findAllTransactions() {
-        return [];
+    async findAllTransactions(paginationQuery) {
+        const { limit = 10, page = 1, sort = 'createdAt', order = 'desc' } = paginationQuery;
+        const skip = (page - 1) * limit;
+        const sortOrder = order.toLowerCase() === 'asc' ? 1 : -1;
+        const sortStage = { $sort: { [sort]: sortOrder, '_id': sortOrder } };
+        const pipeline = [
+            ...(sort.startsWith('student_info.') || sort === 'createdAt' || sort === 'school_id' ? [sortStage] : []),
+            {
+                $lookup: {
+                    from: this.orderStatusModel.collection.name,
+                    localField: '_id',
+                    foreignField: 'collect_id',
+                    as: 'statusInfo',
+                    pipeline: [
+                        { $sort: { createdAt: -1 } },
+                        { $limit: 1 }
+                    ]
+                },
+            },
+            {
+                $unwind: {
+                    path: '$statusInfo',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            ...(!sort.startsWith('student_info.') && sort !== 'createdAt' && sort !== 'school_id' ? [sortStage] : []),
+            { $skip: skip },
+            { $limit: limit },
+            {
+                $project: {
+                    _id: 0,
+                    custom_order_id: '$_id',
+                    collect_id: '$statusInfo.collect_id',
+                    school_id: '$school_id',
+                    gateway: '$gateway_name',
+                    order_amount: '$statusInfo.order_amount',
+                    transaction_amount: '$statusInfo.transaction_amount',
+                    status: '$statusInfo.status',
+                    payment_time: '$statusInfo.payment_time',
+                    createdAt: '$createdAt',
+                },
+            },
+        ];
+        const transactions = await this.orderModel.aggregate(pipeline).exec();
+        const countPipeline = [
+            ...(sort.startsWith('student_info.') || sort === 'createdAt' || sort === 'school_id' ? [sortStage] : []),
+            {
+                $lookup: {
+                    from: this.orderStatusModel.collection.name,
+                    localField: '_id',
+                    foreignField: 'collect_id',
+                    as: 'statusInfo',
+                    pipeline: [{ $limit: 1 }]
+                },
+            },
+            {
+                $unwind: {
+                    path: '$statusInfo',
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            { $count: 'total' }
+        ];
+        const countResult = await this.orderModel.aggregate(countPipeline).exec();
+        const total = countResult.length > 0 ? countResult[0].total : 0;
+        return { data: transactions, total };
     }
-    async findTransactionsBySchool(schoolId) {
-        return [];
+    async findTransactionsBySchool(schoolId, paginationQuery) {
+        const { limit = 10, page = 1, sort = 'createdAt', order = 'desc' } = paginationQuery;
+        const skip = (page - 1) * limit;
+        const sortOrder = order.toLowerCase() === 'asc' ? 1 : -1;
+        const sortStage = { $sort: { [sort]: sortOrder, '_id': sortOrder } };
+        const pipeline = [
+            { $match: { school_id: schoolId } },
+            ...(sort.startsWith('student_info.') || sort === 'createdAt' || sort === 'school_id' ? [sortStage] : []),
+            {
+                $lookup: {
+                    from: this.orderStatusModel.collection.name,
+                    localField: '_id', foreignField: 'collect_id', as: 'statusInfo',
+                    pipeline: [{ $sort: { createdAt: -1 } }, { $limit: 1 }]
+                },
+            },
+            { $unwind: { path: '$statusInfo', preserveNullAndEmptyArrays: true, }, },
+            ...(!sort.startsWith('student_info.') && sort !== 'createdAt' && sort !== 'school_id' ? [sortStage] : []),
+            { $skip: skip },
+            { $limit: limit },
+            {
+                $project: {
+                    _id: 0, custom_order_id: '$_id', collect_id: '$statusInfo.collect_id',
+                    school_id: '$school_id', gateway: '$gateway_name',
+                    order_amount: '$statusInfo.order_amount', transaction_amount: '$statusInfo.transaction_amount',
+                    status: '$statusInfo.status', payment_time: '$statusInfo.payment_time', createdAt: '$createdAt',
+                },
+            },
+        ];
+        const transactions = await this.orderModel.aggregate(pipeline).exec();
+        const countPipeline = [
+            { $match: { school_id: schoolId } },
+            { $lookup: { from: this.orderStatusModel.collection.name, localField: '_id', foreignField: 'collect_id', as: 'statusInfo', pipeline: [{ $limit: 1 }] } },
+            { $unwind: { path: '$statusInfo', preserveNullAndEmptyArrays: true } },
+            { $count: 'total' }
+        ];
+        const countResult = await this.orderModel.aggregate(countPipeline).exec();
+        const total = countResult.length > 0 ? countResult[0].total : 0;
+        return { data: transactions, total };
     }
-    async findTransactionStatus(orderId) {
-        return null;
+    async findTransactionStatus(customOrderId) {
+        if (!mongoose_2.Types.ObjectId.isValid(customOrderId)) {
+            throw new common_1.BadRequestException('Invalid custom_order_id format.');
+        }
+        const orderObjectId = new mongoose_2.Types.ObjectId(customOrderId);
+        const status = await this.orderStatusModel
+            .findOne({ collect_id: orderObjectId })
+            .sort({ createdAt: -1 })
+            .exec();
+        return status;
     }
 };
 exports.OrdersService = OrdersService;

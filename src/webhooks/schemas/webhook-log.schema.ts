@@ -19,7 +19,10 @@ export class WebhookLog {
   payload: any;
 
   @Prop({ default: Date.now })
-  receivedAt: Date;
+  received_at: Date;
+
+  @Prop({ type: Date })
+  processed_at: Date;
 
   // Use the Enum for type safety and restrict values
   @Prop({ type: String, enum: ProcessingStatus, default: ProcessingStatus.RECEIVED, index: true })

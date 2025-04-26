@@ -23,24 +23,21 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
         this.webhooksService = webhooksService;
     }
     async handlePaymentWebhook(payload) {
-        this.logger.log('Payment webhook received.');
-        let logEntry;
+        this.logger.log(`Received payment webhook: ${JSON.stringify(payload)}`);
         try {
-            logEntry = await this.webhooksService.logWebhook(payload, 'PaymentGateway');
-        }
-        catch (error) {
-            this.logger.error(`Critical logging failure: ${error.message}`);
-            return { message: 'Webhook received but failed to log initially.' };
-        }
-        if (logEntry) {
+            const logEntry = await this.webhooksService.logWebhook(payload, 'PaymentGateway');
             process.nextTick(() => {
                 this.webhooksService.processPaymentWebhook(logEntry)
                     .catch(error => {
-                    this.logger.error(`Unhandled error during async webhook processing for log ${logEntry._id}: ${error.message}`, error.stack);
+                    this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
                 });
             });
+            return { message: 'Webhook received' };
         }
-        return { message: 'Webhook received' };
+        catch (error) {
+            this.logger.error(`Error handling webhook: ${error.message}`, error.stack);
+            return { message: 'Webhook received' };
+        }
     }
 };
 exports.WebhooksController = WebhooksController;

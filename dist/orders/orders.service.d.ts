@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrderDocument } from './schemas/order.schema';
 import { OrderStatusDocument } from './schemas/order-status.schema';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 export declare class OrdersService {
     private orderModel;
     private orderStatusModel;
@@ -16,7 +17,13 @@ export declare class OrdersService {
         paymentRedirectUrl: string;
         collectRequestId: string;
     }>;
-    findAllTransactions(): Promise<never[]>;
-    findTransactionsBySchool(schoolId: string): Promise<never[]>;
-    findTransactionStatus(orderId: string): Promise<null>;
+    findAllTransactions(paginationQuery: PaginationQueryDto): Promise<{
+        data: any[];
+        total: number;
+    }>;
+    findTransactionsBySchool(schoolId: string, paginationQuery: PaginationQueryDto): Promise<{
+        data: any[];
+        total: number;
+    }>;
+    findTransactionStatus(customOrderId: string): Promise<OrderStatusDocument | null>;
 }
