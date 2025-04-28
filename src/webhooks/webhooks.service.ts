@@ -88,9 +88,9 @@ export class WebhooksService {
         order_amount: orderInfo.order_amount,
         transaction_amount: orderInfo.transaction_amount,
         payment_mode: orderInfo.payment_mode,
-        payment_details: orderInfo.payemnt_details, // Note: typo in field name from API
+        payment_details: orderInfo.payment_details, // Note: typo in field name from API
         bank_reference: orderInfo.bank_reference,
-        payment_message: orderInfo.Payment_message, // Note: capitalization in field name from API
+        payment_message: orderInfo.payment_message, // Note: capitalization in field name from API
         status: orderInfo.status, // e.g., "success"
         error_message: orderInfo.error_message === "NA" ? undefined : orderInfo.error_message,
         payment_time: orderInfo.payment_time ? new Date(orderInfo.payment_time) : undefined,
