@@ -1,98 +1,248 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# School Payment System
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A robust backend system for handling school fee payments, processing webhook notifications, and managing transaction records.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Table of Contents
 
-## Description
+- [Overview](#overview)
+- [Features](#features)
+- [System Architecture](#system-architecture)
+- [Installation](#installation)
+- [Environment Configuration](#environment-configuration)
+- [API Endpoints](#api-endpoints)
+- [Testing](#testing)
+- [Error Handling](#error-handling)
+- [Security](#security)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Overview
 
-## Project setup
+This application provides a NestJS-based REST API for initiating school fee payments, handling payment gateway callbacks via webhooks, and querying transaction statuses. It integrates with a payment gateway API to facilitate secure transactions.
 
-```bash
-$ npm install
+## Features
+
+- **User Authentication**: JWT-based authentication with secure password handling
+- **Payment Initiation**: API to create payment orders and redirect to payment gateway
+- **Webhook Processing**: Asynchronous handling of payment gateway callbacks
+- **Transaction Management**: APIs to query transaction statuses and history
+- **Error Handling**: Comprehensive error handling with appropriate HTTP responses
+- **Data Validation**: Input validation using class-validator
+- **MongoDB Integration**: Persistent data storage with Mongoose ODM
+
+## System Architecture
+
+### Core Modules
+
+- **Auth Module**: Handles user registration, authentication, and JWT management
+- **Orders Module**: Manages payment orders, initiates payments, and tracks transaction status
+- **Webhooks Module**: Processes payment gateway callbacks and updates order statuses
+- **Users Module**: Handles user account management and data access
+
+### Database Schema
+
+- **User**: Stores user credentials and authentication details
+- **Order**: Records payment orders with student information and amount details
+- **OrderStatus**: Tracks payment statuses from webhook callbacks
+- **WebhookLog**: Records all incoming webhook payloads for audit and debugging
+
+## Installation
+
+### Prerequisites
+
+- Node.js (v16+)
+- MongoDB (v5+)
+- npm or yarn package manager
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/school-payment-assessment.git
+   cd school-payment-assessment/backend
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment variables (see [Environment Configuration](#environment-configuration))
+
+4. Start the development server:
+   ```bash
+   npm run start:dev
+   ```
+
+5. The API will be available at `http://localhost:3000`
+
+## Environment Configuration
+
+Create a `.env` file in the backend directory with the following variables:
+
+```
+# MongoDB Configuration
+MONGO_URI=mongodb+srv://<USERNAME>:<PASSWORD>@<CLUSTER>.mongodb.net/<DATABASE>?retryWrites=true&w=majority
+
+# JWT Configuration
+JWT_SECRET=your_strong_jwt_secret_key
+JWT_EXPIRATION_TIME=3600s
+
+# Payment Gateway API Credentials
+PAYMENT_PG_KEY=your_payment_pg_key
+PAYMENT_API_KEY=your_payment_api_key
+PAYMENT_SCHOOL_ID=your_school_id
+PAYMENT_API_BASE_URL=https://dev-vanilla.edviron.com/erp
+PAYMENT_PG_SECRET_KEY=your_payment_pg_secret_key
+
+# Optional: Application Port
+PORT=3000
 ```
 
-## Compile and run the project
+## API Endpoints
 
-```bash
-# development
-$ npm run start
+### Authentication
 
-# watch mode
-$ npm run start:dev
+#### Register
 
-# production mode
-$ npm run start:prod
+```
+POST /auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "securepassword123",
+  "email": "user@example.com"
+}
 ```
 
-## Run tests
+#### Login
 
-```bash
-# unit tests
-$ npm run test
+```
+POST /auth/login
+Content-Type: application/json
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+{
+  "username": "testuser",
+  "password": "securepassword123"
+}
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+Response:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Orders & Payments
 
-## Resources
+#### Create Payment
 
-Check out a few resources that may come in handy when working with NestJS:
+```
+POST /orders/create-payment
+Authorization: Bearer {token}
+Content-Type: application/json
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+{
+  "school_id": "school123",
+  "student_info": {
+    "name": "Jane Doe",
+    "id": "STU12345",
+    "email": "student@example.com"
+  },
+  "amount": 1000,
+  "callback_url": "https://yourapp.com/payment/callback"
+}
+```
 
-## Support
+Response:
+```json
+{
+  "paymentRedirectUrl": "https://payment-gateway.com/pay/abc123",
+  "collectRequestId": "req12345"
+}
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+#### Get All Transactions
 
-## Stay in touch
+```
+GET /orders/transactions?page=1&limit=10&sort=payment_time&order=desc
+Authorization: Bearer {token}
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+#### Get Transactions by School
 
-## License
+```
+GET /orders/transactions/school/school123?page=1&limit=10
+Authorization: Bearer {token}
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+#### Get Transaction Status
+
+```
+GET /orders/transaction-status/60f1a5c9e6b3f32a48b83a1c
+Authorization: Bearer {token}
+```
+
+### Webhooks
+
+#### Payment Webhook
+
+```
+POST /webhooks/payment
+Content-Type: application/json
+
+{
+  "order_info": {
+    "order_id": "60f1a5c9e6b3f32a48b83a1c/txn12345",
+    "order_amount": 1000,
+    "transaction_amount": 1000,
+    "payment_mode": "UPI",
+    "payment_details": "details",
+    "bank_reference": "REF123456",
+    "payment_message": "Success",
+    "status": "SUCCESS",
+    "error_message": "NA",
+    "payment_time": "2023-07-16T10:15:30Z"
+  }
+}
+```
+
+## Testing
+
+### Using Postman
+
+Download the [Postman Collection](https://link-to-your-postman-collection) to test the API endpoints.
+
+Import the collection into Postman and configure the environment variables:
+- `baseUrl`: Your API base URL (default: http://localhost:3000)
+- `token`: The JWT token received from the login endpoint
+
+### Running Tests
+
+Execute the test suite:
+```bash
+npm test
+```
+
+Run end-to-end tests:
+```bash
+npm run test:e2e
+```
+
+## Error Handling
+
+The API implements consistent error handling with appropriate HTTP status codes:
+
+- `400 Bad Request`: Invalid input data
+- `401 Unauthorized`: Missing or invalid authentication
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Resource not found
+- `500 Internal Server Error`: Server-side issues
+
+## Security
+
+- All passwords are hashed using bcrypt
+- API routes are protected with JWT authentication
+- Input data is validated before processing
+- Sensitive environment variables are required for operation
+- Webhook processing is performed asynchronously to prevent timeouts
